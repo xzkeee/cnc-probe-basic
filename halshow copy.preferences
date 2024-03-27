@@ -1,0 +1,35 @@
+# Halshow settings
+# This file is generated automatically.
+wm geometry . 732x614+896+182
+placeFrames 0.3001083423618635
+set ::ratio 0.3001083423618635
+set ::old_w_leftf 277
+set ::watchlist {
+    pin+joint.0.motor-pos-fb
+    pin+lcec.0.1.actual-torque
+    pin+joint.1.motor-pos-fb
+    pin+lcec.0.2.actual-torque
+    pin+joint.2.motor-pos-fb
+    pin+lcec.0.3.actual-torque
+    pin+lcec.0.0.actual-torque
+    pin+joint.0.f-error
+    pin+joint.1.f-error
+    pin+joint.2.f-error
+    pin+cia402.1.drv-actual-position
+    pin+cia402.0.drv-actual-position
+    pin+cia402.0.drv-actual-velocity
+    pin+spindle.0.speed-out
+    pin+limit3.0.out
+    pin+or2.probe.in0
+    pin+or2.probe.in1
+    pin+or2.probe.out
+    sig+estop-out
+    sig+estop-ext
+}
+set ::workmode watchhal
+set ::watchInterval 100
+set ::col1_width 100
+set ::ffmts 
+set ::ifmts 
+set ::alwaysOnTop 0
+set ::autoSaveWatchlist 1

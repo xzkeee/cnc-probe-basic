@@ -1,0 +1,5 @@
+;Tool  Pocket Z Offset     Diameter     Remark
+T1      P1     D5 Z-0
+T2      P2     D8 Z-0 ;8mm 3f alu
+T3      P3     D10 Z-0  ;10mm one flu 
+T99    P99 D2  Z0 ; base reference 

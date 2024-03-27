@@ -1,0 +1,304 @@
+###########################################################
+#
+# CIA 402 example snippet Hal
+#
+###########################################################
+
+###########################################################
+# Setup
+###########################################################
+
+loadrt [KINS]KINEMATICS
+loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JOINTS num_dio=30 num_aio=30
+
+loadusr -W lcec_conf ethercat-conf.xml
+loadrt lcec
+loadrt cia402 count=4
+
+loadrt hal_parport cfg="0 out"
+
+
+# load 6 differentiators (for velocity and accel signals)
+loadrt ddt names=ddt_x,ddt_xv,ddt_y,ddt_yv,ddt_z,ddt_zv
+# load additional blocks
+loadrt hypot names=vel_xy,vel_xyz
+# link the differentiator functions into the code
+addf ddt_x servo-thread
+addf ddt_xv servo-thread
+addf ddt_y servo-thread
+addf ddt_yv servo-thread
+addf ddt_z servo-thread
+addf ddt_zv servo-thread
+addf vel_xy servo-thread
+addf vel_xyz servo-thread
+
+
+
+loadrt limit3
+addf limit3.0 servo-thread
+loadrt or2 names=or2.0,or2.probe
+addf or2.0 servo-thread
+addf or2.probe servo-thread
+loadrt near
+addf near.0 servo-thread
+loadrt not names=not.spindle,not.toolprobe,not.probe,not.probe-out,not.0
+addf not.spindle servo-thread
+addf not.toolprobe servo-thread
+addf not.probe servo-thread
+addf not.probe-out servo-thread
+loadrt debounce cfg=1
+addf debounce.0     servo-thread
+
+setp parport.0.reset-time 5000
+
+
+addf parport.0.read servo-thread
+addf parport.0.write servo-thread
+addf parport.0.reset servo-thread
+
+###########################################################
+# Functions servo-thread
+###########################################################
+
+addf lcec.read-all servo-thread
+addf  cia402.0.read-all servo-thread
+addf  cia402.1.read-all servo-thread
+addf  cia402.2.read-all servo-thread
+addf  cia402.3.read-all servo-thread
+
+addf motion-command-handler servo-thread
+addf motion-controller servo-thread
+
+addf  cia402.0.write-all servo-thread
+addf  cia402.1.write-all servo-thread
+addf  cia402.2.write-all servo-thread
+addf  cia402.3.write-all servo-thread
+addf lcec.write-all servo-thread
+
+
+#########################################
+#nets
+#########################################
+
+
+
+
+#config
+
+
+
+#
+# spindle
+#
+
+setp  cia402.0.csp-mode 0
+##csp mode 0 = csv volicty mode
+setp  cia402.0.velo-scale 1092.26667
+#scale = 1rev count / gear ratio 2 /60rpm
+net spindle-fwd spindle.0.forward
+net spindle-rev spindle.0.reverse
+
+#from servo(ethercat) to cia402
+net spindle-statusword      lcec.0.0.cia-statusword =>  cia402.0.statusword
+net spindle-opmode-display  lcec.0.0.opmode-display =>  cia402.0.opmode-display
+net spindle-drv-act-pos     lcec.0.0.actual-position =>  cia402.0.drv-actual-position
+net spindle-drv-act-velo    lcec.0.0.actual-velocity =>  cia402.0.drv-actual-velocity
+
+#from motion to cia
+#net spindle-home-index <= joint.0.index-enable  =>  cia402.0.home
+net spindle-on    spindle.0.on =>  or2.0.in0
+net spindle-amp-fault   <=  cia402.0.drv-fault
+setp limit3.0.maxv 500
+#500 rpm change /s
+setp limit3.0.enable true
+net spindle-speed-out spindle.0.speed-out  => limit3.0.in 
+setp near.0.in1 0
+setp  near.0.difference 1
+net spindle-velocity-cmd     limit3.0.out =>  cia402.0.velocity-cmd  => near.0.in2
+net spindle-velocity-fb     <=  cia402.0.velocity-fb
+net not-spindle not.spindle.in <= near.0.out
+net or0in1 or2.0.in1 <= not.spindle.out
+net spindle-enable  or2.0.out => cia402.0.enable 
+
+#from cia402 to servo(ethercat)
+net spindle-controlword          cia402.0.controlword => lcec.0.0.cia-controlword
+net spindle-modes-of-operation   cia402.0.opmode => lcec.0.0.opmode
+net spindle-drv-target-velocity       cia402.0.drv-target-velocity => lcec.0.0.target-velocity
+
+
+
+
+ 
+#
+# Joint 0 X
+#
+setp  cia402.1.csp-mode 1
+setp  cia402.1.pos-scale 26214.4
+
+
+#from servo(ethercat) to cia402
+net x-statusword      lcec.0.1.cia-statusword =>  cia402.1.statusword
+net x-opmode-display  lcec.0.1.opmode-display =>  cia402.1.opmode-display
+net x-drv-act-pos     lcec.0.1.actual-position =>  cia402.1.drv-actual-position
+net x-drv-act-velo    lcec.0.1.actual-velocity =>  cia402.1.drv-actual-velocity
+#net x-drv-act-torq    lcec.0.1.actual-velocity =>  cia402.1.drv-actual-velocity
+
+#from motion to cia
+net x-home-index <= joint.0.index-enable  =>  cia402.1.home
+net x-enable     <= joint.0.amp-enable-out =>  cia402.1.enable
+net x-amp-fault  => joint.0.amp-fault-in   <=  cia402.1.drv-fault
+net x-pos-cmd    <= joint.0.motor-pos-cmd  =>  cia402.1.pos-cmd ddt_x.in
+net x-pos-fb     => joint.0.motor-pos-fb   <=  cia402.1.pos-fb
+
+#from cia402 to servo(ethercat)
+net x-controlword          cia402.1.controlword => lcec.0.1.cia-controlword
+net x-modes-of-operation   cia402.1.opmode => lcec.0.1.opmode
+net x-drv-target-pos       cia402.1.drv-target-position => lcec.0.1.target-position
+
+
+
+
+#
+# Joint 1
+#
+setp  cia402.2.csp-mode 1
+setp  cia402.2.pos-scale 26214.4
+#bigger ,move smaller 1rev
+#gear ratio 838,8608/10000  #23bit   
+
+
+#from servo(ethercat) to cia402
+net 1-statusword      lcec.0.2.cia-statusword =>  cia402.2.statusword
+net 1-opmode-display  lcec.0.2.opmode-display =>  cia402.2.opmode-display
+net 1-drv-act-pos     lcec.0.2.actual-position =>  cia402.2.drv-actual-position
+net 1-drv-act-velo    lcec.0.2.actual-velocity =>  cia402.2.drv-actual-velocity
+
+#from motion to cia
+
+net 1-home-index <= joint.1.index-enable  =>  cia402.2.home
+net 1-enable     <= joint.1.amp-enable-out =>  cia402.2.enable
+net 1-amp-fault  => joint.1.amp-fault-in   <=  cia402.2.drv-fault
+net 1-pos-cmd    <= joint.1.motor-pos-cmd  =>  cia402.2.pos-cmd ddt_y.in
+net 1-pos-fb     => joint.1.motor-pos-fb   <=  cia402.2.pos-fb
+
+#from cia402 to servo(ethercat)
+net 1-controlword          cia402.2.controlword => lcec.0.2.cia-controlword
+net 1-modes-of-operation   cia402.2.opmode => lcec.0.2.opmode
+net 1-drv-target-pos       cia402.2.drv-target-position => lcec.0.2.target-position
+
+
+#
+# Joint 2
+#
+setp  cia402.3.csp-mode 1
+setp  cia402.3.pos-scale -26214.4
+#if want to reverse, make negetavie
+#1 rev 131072     /5mm/ rev         =26214.4
+
+
+#from servo(ethercat) to cia402
+net 2-statusword      lcec.0.3.cia-statusword =>  cia402.3.statusword
+net 2-opmode-display  lcec.0.3.opmode-display =>  cia402.3.opmode-display
+net 2-drv-act-pos     lcec.0.3.actual-position =>  cia402.3.drv-actual-position
+net 2-drv-act-velo    lcec.0.3.actual-velocity =>  cia402.3.drv-actual-velocity
+
+#from motion to cia
+
+net 2-home-index <= joint.2.index-enable  =>  cia402.3.home
+net 2-enable     <= joint.2.amp-enable-out =>  cia402.3.enable 
+net 2-amp-fault  => joint.2.amp-fault-in   <=  cia402.3.drv-fault
+net 2-pos-cmd    <= joint.2.motor-pos-cmd  =>  cia402.3.pos-cmd ddt_z.in
+net 2-pos-fb     => joint.2.motor-pos-fb   <=  cia402.3.pos-fb
+
+#from cia402 to servo(ethercat)
+net 2-controlword          cia402.3.controlword => lcec.0.3.cia-controlword
+net 2-modes-of-operation   cia402.3.opmode => lcec.0.3.opmode
+net 2-drv-target-pos       cia402.3.drv-target-position => lcec.0.3.target-position
+
+
+# send the position commands thru differentiators to
+# generate velocity and accel signals
+net Xvel ddt_x.out => ddt_xv.in vel_xy.in0
+net Xacc <= ddt_xv.out
+net Yvel ddt_y.out => ddt_yv.in vel_xy.in1
+net Yacc <= ddt_yv.out
+net Zvel ddt_z.out => ddt_zv.in vel_xyz.in0
+net Zacc <= ddt_zv.out
+
+# Cartesian 2- and 3-axis velocities
+net XYvel vel_xy.out => vel_xyz.in1
+net XYZvel <= vel_xyz.out
+
+
+#Outputs
+#M3,M4,M5
+
+
+#io
+net flood iocontrol.0.coolant-flood
+net mist iocontrol.0.coolant-mist
+#net tlo motion.analog-in-30 <= halui.tool.length_offset.z
+
+#net coolant-mist <= iocontrol.0.coolant-mist
+
+#net probe-in => motion.probe-input
+net mist    => parport.0.pin-04-out
+net estop-ext       <= parport.0.pin-10-in
+net estop-out <= iocontrol.0.user-enable-out
+net estop-ext => iocontrol.0.emc-enable-in
+#net emc-enable => iocontrol.0.emc-enable-in
+#sets emc-enable 1
+
+
+#probe
+net toolprobe-in-raw     <=  parport.0.pin-11-in
+net toolprobe-in-raw => not.toolprobe.in
+net toolprobe-in-raw-rev  not.toolprobe.out    =>  or2.probe.in0
+net probe-in-raw     <=  parport.0.pin-12-in
+net probe-in-raw   => not.probe.in
+net probe-in-raw-rev    not.probe.out =>  or2.probe.in1
+net probe-out   or2.probe.out => not.probe-out.in
+net probe-in  not.probe-out.out =>  motion.probe-input
+#net allprobe-in-raw or2.probe.out
+
+# --- TOOL-LENGTH-PROBE-BLAST ---
+#net probe-blast =>   parport.0.pin-03-out
+net probe-blast =>    motion.digital-out-00
+
+
+
+#  ---coolant signals---
+
+#net coolant-mist      <=  iocontrol.0.coolant-mist
+#net coolant-flood     <=  iocontrol.0.coolant-flood
+#net coolant-mist or2.coolant.in0
+#net coolant-flood or2.coolant.in1
+#net coolant or2.coolant.out
+
+#  ---probe signal---
+
+#setp debounce.0.delay 20  # 20 * servo-thread period (1000us) = 20ms
+#net toolprobe-in-raw => not.toolprobe.in
+#net toolprobe-in-raw => or2.probe.in0
+#net toolprobe-in-raw =>debounce.0.0.in
+#net toolprobe-in-raw-rev  not.toolprobe.out    =>  or2.probe.in0
+#net probe-in-raw     =>  not.probe.in
+#net probe-in-raw-rev  not.probe.out    =>  or2.probe.in1
+#net probe-in  or2.probe.out =>  motion.probe-input
+#net probe-in debounce.0.0.out => motion.probe-input
+
+#  ---motion control signals---
+net in-position               <=  motion.in-position
+net machine-is-enabled        <=  motion.motion-enabled
+
+#  ---manual tool change signals---
+net tool-change-request    <= iocontrol.0.tool-change
+net tool-change-confirmed  => iocontrol.0.tool-changed
+net tool-number            <= iocontrol.0.tool-prep-number
+
+#  ---ignore tool prepare requests---
+net tool-prepare-loopback   iocontrol.0.tool-prepare      =>  iocontrol.0.tool-prepared
+
+net spindle-fwd spindle.0.forward
+net spindle-rev spindle.0.reverse
+#net spindle-speed spindle.0.speed-out
